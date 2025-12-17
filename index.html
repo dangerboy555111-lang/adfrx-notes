@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AdFr X Notes</title>
+
+<style>
+body{
+  margin:0;
+  font-family:system-ui;
+  background:#0b1220;
+  color:#e5e7eb;
+}
+.hidden{display:none}
+.fade{animation:fade .4s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+.loader{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:20px;
+  background:#0b1220;
+}
+
+.screen{padding:14px}
+
+header{text-align:center;margin-bottom:14px}
+header h1{margin:0;font-size:22px}
+header p{margin:3px 0 0;font-size:12px;opacity:.6}
+
+input,textarea{
+  width:100%;
+  background:#111827;
+  border:none;
+  border-radius:14px;
+  padding:12px;
+  font-size:16px;
+  color:white;
+  outline:none;
+}
+
+textarea{height:38vh;resize:none}
+
+button{
+  width:100%;
+  margin-top:8px;
+  padding:12px;
+  border:none;
+  border-radius:14px;
+  font-size:15px;
+}
+
+.primary{background:#22c55e;color:#052e16}
+.secondary{background:#1f2937;color:white}
+.danger{background:#ef4444;color:white}
+
+.note{
+  background:#111827;
+  padding:12px;
+  border-radius:14px;
+  margin-bottom:8px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.note-title{font-weight:600}
+.note-preview{font-size:12px;opacity:.6}
+
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+footer{
+  text-align:center;
+  font-size:11px;
+  margin-top:12px;
+  opacity:.6;
+}
+</style>
+</head>
+
+<body>
+
+<div class="loader">Loading AdFr X Notes...</div>
+
+<div id="pinScreen" class="screen hidden fade">
+<header>
+<h1>AdFr X Notes</h1>
+<p>Enter PIN</p>
+</header>
+<input id="pinInput" type="password" placeholder="4-digit PIN">
+<button class="primary" onclick="checkPin()">Unlock</button>
+</div>
+
+<div id="appScreen" class="screen hidden fade">
+<header>
+<h1>AdFr X Notes</h1>
+<p>Created by Adnan</p>
+</header>
+
+<input id="search" placeholder="Search notes..." oninput="render()">
+
+<div id="list"></div>
+
+<input id="title" placeholder="Note title">
+<textarea id="text" placeholder="Write your note..."></textarea>
+
+<button class="primary" onclick="save()">Save Note</button>
+
+<div class="actions">
+<button class="secondary" onclick="exportNotes()">Export</button>
+<button class="secondary" onclick="importNotes()">Import</button>
+</div>
+
+<button class="secondary" onclick="changePin()">Change PIN</button>
+
+<footer>Offline • Secure • Backup Ready</footer>
+</div>
+
+<script>
+const loader=document.querySelector(".loader");
+const pinScreen=document.getElementById("pinScreen");
+const appScreen=document.getElementById("appScreen");
+
+const pinInput=document.getElementById("pinInput");
+const search=document.getElementById("search");
+const list=document.getElementById("list");
+const titleInput=document.getElementById("title");
+const text=document.getElementById("text");
+
+let notes=JSON.parse(localStorage.getItem("adfrx_notes")||"[]");
+let pin=localStorage.getItem("adfrx_pin");
+let edit=-1;
+let unlocked=false;
+
+setTimeout(()=>{
+  loader.style.display="none";
+  if(pin){
+    pinScreen.classList.remove("hidden");
+  }else{
+    setNewPin();
+  }
+},600);
+
+function setNewPin(){
+  let p=prompt("Set a 4-digit PIN");
+  if(p && p.length===4){
+    localStorage.setItem("adfrx_pin",p);
+    pin=p;
+    appScreen.classList.remove("hidden");
+  }else{
+    setNewPin();
+  }
+}
+
+function checkPin(){
+  if(pinInput.value===pin){
+    unlocked=true;
+    pinScreen.classList.add("hidden");
+    appScreen.classList.remove("hidden");
+    render();
+  }else alert("Wrong PIN");
+}
+
+function changePin(){
+  let old=prompt("Enter old PIN");
+  if(old===pin){
+    localStorage.removeItem("adfrx_pin");
+    location.reload();
+  }else alert("Wrong PIN");
+}
+
+function render(){
+  list.innerHTML="";
+  let q=search.value.toLowerCase();
+  notes.forEach((n,i)=>{
+    if(n.title.toLowerCase().includes(q)||n.text.toLowerCase().includes(q)){
+      let d=document.createElement("div");
+      d.className="note";
+      d.innerHTML=`
+        <div onclick="openNote(${i})">
+          <div class="note-title">${n.title||"Untitled"}</div>
+          <div class="note-preview">${n.text.slice(0,30)}</div>
+        </div>
+        <button class="danger" onclick="del(${i})">X</button>`;
+      list.appendChild(d);
+    }
+  });
+}
+
+function openNote(i){
+  titleInput.value=notes[i].title;
+  text.value=notes[i].text;
+  edit=i;
+}
+
+function save(){
+  if(!text.value.trim())return;
+  let note={title:titleInput.value,text:text.value};
+  if(edit>=0){notes[edit]=note;edit=-1}
+  else notes.unshift(note);
+  titleInput.value="";text.value="";
+  localStorage.setItem("adfrx_notes",JSON.stringify(notes));
+  render();
+}
+
+function del(i){
+  event.stopPropagation();
+  if(confirm("Delete note?")){
+    notes.splice(i,1);
+    localStorage.setItem("adfrx_notes",JSON.stringify(notes));
+    render();
+  }
+}
+
+function exportNotes(){
+  let blob=new Blob([JSON.stringify(notes)],{type:"application/json"});
+  let a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="adfrx_notes_backup.json";
+  a.click();
+}
+
+function importNotes(){
+  let i=document.createElement("input");
+  i.type="file";
+  i.onchange=e=>{
+    let r=new FileReader();
+    r.onload=()=>{notes=JSON.parse(r.result);localStorage.setItem("adfrx_notes",r.result);render();}
+    r.readAsText(e.target.files[0]);
+  };
+  i.click();
+}
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden && unlocked) location.reload();
+});
+</script>
+
+</body>
+</html>
